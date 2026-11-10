@@ -1,0 +1,89 @@
+# Solo desarrollo local. En producción, usar secretos administrados y roles
+# de base separados por despliegue.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: turnos
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definir POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d turnos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    command: ["python", "-m", "turnos.migrate"]
+    volumes:
+      - ./db:/app/db:ro
+      - ./turnos:/app/turnos:ro
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://postgres@db:5432/turnos
+      MIGRATION_DB_PASSWORD: ${POSTGRES_PASSWORD:?Definir POSTGRES_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Definir APP_DB_PASSWORD}
+      REMINDER_DB_PASSWORD: ${REMINDER_DB_PASSWORD:?Definir REMINDER_DB_PASSWORD}
+      BOOTSTRAP_BUSINESS_NAME: ${BOOTSTRAP_BUSINESS_NAME:-}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      SEED_BUSINESS_NAME: ${SEED_BUSINESS_NAME:-}
+      SEED_PROFESSIONAL_PASSWORD: ${SEED_PROFESSIONAL_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    # Desarrollo local: el código Python se monta sin reconstruir la imagen.
+    volumes:
+      - ./turnos:/app/turnos:ro
+    environment:
+      APP_DATABASE_URL: postgresql://turnos_app@db:5432/turnos
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Definir APP_DB_PASSWORD}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:5173}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      APP_ENV: development
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./frontend
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+    environment:
+      VITE_API_TARGET: http://api:8000
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  reminders:
+    profiles: ["reminders"]
+    build: .
+    command: ["python", "-m", "turnos.reminders"]
+    environment:
+      REMINDER_DATABASE_URL: postgresql://turnos_reminder@db:5432/turnos
+      REMINDER_DB_PASSWORD: ${REMINDER_DB_PASSWORD:?Definir REMINDER_DB_PASSWORD}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      REMINDER_POLL_SECONDS: ${REMINDER_POLL_SECONDS:-60}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:

@@ -1,0 +1,11 @@
+# Interfaz desktop (primera iteración)
+
+React + TypeScript + Vite. Requiere la API del directorio raíz en `http://localhost:8000`. Ejecutar `npm install` y `npm run dev` dentro de `frontend/` cuando se acuerde verificar el sistema. **No se ejecutaron instalación, tests ni build en esta entrega.**
+
+Durante desarrollo, Vite expone la UI en `http://localhost:5173` y proxifica `/auth`, `/clientes`, `/profesionales`, `/turnos` y `/personal` a la API. Configurar `APP_ORIGIN=http://localhost:5173` en la API: sus escrituras rechazan cualquier otro header `Origin`. La cookie de sesión es HttpOnly y se envía desde el mismo origen. En producción, servir UI y API bajo un único origen HTTPS mediante proxy; no abrir CORS para resolverlo.
+
+Se muestran clientes hasta el límite de la primera página (100), turnos de un día (límite API: 500), profesionales y horarios en lectura. Alta de clientes, alta y cancelación de turnos respetan permisos del backend. La selección de email guarda la preferencia para el recordatorio. El envío efectivo requiere configurar y operar el servicio de correo; WhatsApp queda fuera de alcance por ahora. El teléfono se conserva como dato general de contacto. No hay aún edición, reprogramación, paginación ni edición de horarios en esta UI. El alta de equipo existe mediante invitación manual, pero todavía no hay gestión posterior de sus cuentas o membresías.
+
+`/auth/me` debe entregar `zona_horaria` IANA por negocio. Las fechas y horas de agenda se interpretan en esa zona, no en la del dispositivo. Se usa Temporal con desambiguación `reject`: ante un horario inexistente o duplicado por cambio de hora, la UI pide elegir otro horario en lugar de desplazar silenciosamente la reserva.
+
+Administración puede emitir una invitación en «Personal». El código se muestra únicamente en esa vista y se descarta al ocultarlo, cambiar de negocio o salir de la vista; no se guarda en URL, storage ni cookies. La entrega es manual y por un canal seguro, **no se envía email desde esta UI**. La pantalla pública acepta una invitación para crear una cuenta; una persona ya autenticada puede aceptarla con su cuenta actual. Las invitaciones duran 48 horas según el backend. La API se proxifica también en `/personal`.
